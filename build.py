@@ -37,6 +37,7 @@ def build_executable():
         "pyinstaller",
         "--onefile",                    # Single executable file
         "--name=ubik",                  # Executable name
+      # "--target-architecture=universal2",  # Build for both ARM and Intel
         "--add-data=ubik_tools.py:.",   # Include ubik_tools.py
         "--hidden-import=agno.models.openai",
         "--hidden-import=composio_agno",
