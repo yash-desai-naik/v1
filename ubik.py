@@ -21,12 +21,17 @@ try:
     from composio_agno import ComposioToolSet, Action
     from agno.team.team import Team
     from agno.tools.mcp import MCPTools
+    from agno.memory.v2.memory import Memory
+    from agno.memory.v2.db.sqlite import SqliteMemoryDb
+    from agno.storage.sqlite import SqliteStorage
 except ImportError as e:
     print(f"❌ Missing dependencies: {e}")
     print("Please install required packages:")
     print("pip install agno composio-agno openai mcp")
     sys.exit(1)
 
+
+# from smart_agent_selector import smart_agent_selector
 
 # Tool actions mapping
 TOOL_ACTIONS = {
@@ -208,11 +213,11 @@ def list_connected_apps(entity_id: str, composio_api_key: str):
         print(f"❌ Error listing connections: {e}")
 
 
-async def create_dynamic_team(user_request: str, model, toolset: ComposioToolSet):
+async def create_dynamic_team(user_request: str, model:OpenAIChat, agent_selection_model:OpenAIChat, toolset: ComposioToolSet, memory: Memory, storage: SqliteStorage):
     """Create team dynamically based on AI selection"""
     
     # Get AI selection
-    selection = await smart_agent_selector(user_request, model)
+    selection = await smart_agent_selector(user_request, agent_selection_model)
     needed_agents = selection.get("agents", [])
     needs_filesystem = selection.get("needs_filesystem", False)
     
@@ -259,11 +264,17 @@ async def create_dynamic_team(user_request: str, model, toolset: ComposioToolSet
                         "**NOTE: WHILE WORKING WITH GMAIL ATTACHMENTS, USE GMAIL_GET_ATTACHMENT ACTION" ,
                     ],
                     tools=tools,
-                    
+                    memory=memory,
+                    storage=storage,
+                    enable_agentic_memory=True,
+                    enable_user_memories=True,
+                    add_history_to_messages=True,
+                    num_history_runs=3,
+                    markdown=True,
                     add_datetime_to_instructions=True,
-                    timezone_identifier=system_timezone(),
-                    add_location_to_instructions=True
+                    timezone_identifier=system_timezone()
                 )
+                # memory.clear()  # Clear memory for each agent
                 agents.append(agent)
                 
             except Exception as e:
@@ -307,6 +318,7 @@ async def create_dynamic_team(user_request: str, model, toolset: ComposioToolSet
                         "  - Estimate time/resources for long operations",
                          f"user's current time is: {get_user_time()}",
                         f"user's timezone is: {system_timezone()}",
+                        "** NOTE: Provide the path to file or folder if needed after completing the operation",
                     ],
                     add_datetime_to_instructions=True,
                     timezone_identifier=system_timezone(),
@@ -329,13 +341,19 @@ async def create_dynamic_team(user_request: str, model, toolset: ComposioToolSet
                         "When someone ask about you, tell them you are Ubik AI, a personal assistant that can help with various tasks like checking emails, scheduling events, searching the web(composio_search), and managing files. You're designed to assist users in their daily tasks and provide information quickly and efficiently. You're secure and respect user privacy",
                         f"user's timezone is: {system_timezone()} if you want to determine user's timezone, use `date` command or locaition information",
                         f"user's default directory is: {get_home_directory()}/Desktop/Ubik AI",
-                        "don't ask follow-up questions, just provide the answer",
+                        # "don't ask follow-up questions, just provide the answer",
                          f"user's current time is: {get_user_time()}",
                         f"user's timezone is: {system_timezone()}",
                     ],
                     markdown=True,
                     add_datetime_to_instructions=True,
                     add_location_to_instructions=True,
+                    memory=memory,
+                    # storage=storage,
+                    enable_agentic_memory=True,
+                    enable_user_memories=True,
+                    add_history_to_messages=True,
+                    num_history_runs=3,
                 )
                 
                 print(f"👥 Team created with {len(agents)+1} agents")
@@ -378,6 +396,14 @@ async def create_dynamic_team(user_request: str, model, toolset: ComposioToolSet
             markdown=True,
             add_datetime_to_instructions=True,
             add_location_to_instructions=True,
+            memory=memory,
+            # storage=storage,
+            enable_agentic_memory=True,
+            enable_user_memories=True,
+            add_history_to_messages=True,
+            num_history_runs=3,
+            enable_session_summaries=True,
+
         )
         
         print(f"👥 Team created with {len(agents)} agents")
@@ -394,17 +420,17 @@ async def create_dynamic_team(user_request: str, model, toolset: ComposioToolSet
                 ...
 
 
-async def process_query(user_request: str, entity_id: str, openai_key: str, composio_api_key: str):
+async def process_query(user_request: str, entity_id: str, openai_key: str, composio_api_key: str, model:OpenAIChat, agent_selection_model:OpenAIChat, memory: Memory, storage: SqliteStorage):
     """Process a user query"""
     try:
-        model = OpenAIChat("gpt-4o", api_key=openai_key)
+        
         toolset = ComposioToolSet(api_key=composio_api_key, entity_id=entity_id)
         
         print("🤖 Processing your request...")
         print("=" * 50)
-        
-        await create_dynamic_team(user_request, model, toolset)
-        
+
+        await create_dynamic_team(user_request, model, agent_selection_model, toolset, memory, storage)
+
         print("\n" + "=" * 50)
         print("✅ Completed!")
         
@@ -471,15 +497,54 @@ Examples:
     args = parser.parse_args()
     
     print_banner()
+
+    model = OpenAIChat("o4-mini-2025-04-16", api_key=args.openai_key)
+    agent_selection_model = OpenAIChat("gpt-4.1-nano-2025-04-14", api_key=args.openai_key)
     
+    # UserId for the memories
+    user_id = args.entity_id
+    # Database file for memory and storage
+    db_file = "tmp/agent.db"    
+
+    # Initialize memory.v2
+    memory = Memory(
+        # Use any model for creating memories
+        model=OpenAIChat(id="o4-mini-2025-04-16", api_key=args.openai_key),
+        db=SqliteMemoryDb(table_name="user_memories", db_file=db_file),
+    )
+
+    # Initialize storage
+    storage = SqliteStorage(table_name="agent_sessions", db_file=db_file)
+
+    # # Initialize Agent
+    # memory_agent = Agent(
+    #     model=OpenAIChat(id="o4-mini-2025-04-16", api_key=args.openai_key),
+    #     # Store memories in a database
+    #     memory=memory,
+    #     # Give the Agent the ability to update memories
+    #     enable_agentic_memory=True,
+    #     # OR - Run the MemoryManager after each response
+    #     enable_user_memories=True,
+    #     # Store the chat history in the database
+    #     storage=storage,
+    #     # Add the chat history to the messages
+    #     add_history_to_messages=True,
+    #     # Number of history runs
+    #     num_history_runs=3,
+    #     markdown=True,
+    # )
+
+    # memory.clear()
+
+
     # Validate required parameters based on action
     if args.query:
         if not all([args.entity_id, args.composio_api_key, args.openai_key]):
             print("❌ For queries, you need: --entity_id, --composio_api_key, and --openai_key")
             sys.exit(1)
-        
-        asyncio.run(process_query(args.query, args.entity_id, args.openai_key, args.composio_api_key))
-    
+
+        asyncio.run(process_query(args.query, args.entity_id, args.openai_key, args.composio_api_key, model, agent_selection_model, memory, storage))
+
     elif args.list_apps:
         if not args.composio_api_key:
             print("❌ --composio_api_key is required")

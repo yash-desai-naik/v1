@@ -81,6 +81,7 @@ def optimize_build():
         "--hidden-import=composio_agno",
         "--hidden-import=agno.tools.mcp",
         "--hidden-import=mcp",
+        "--hidden-import=sqlalchemy",
         "--hidden-import=agno.team.team", 
         "--hidden-import=agno.agent",
         "--collect-submodules=agno",
@@ -114,7 +115,8 @@ a = Analysis(
         'openai',
         'mcp',
         'pydantic',
-        'python_dotenv'
+        'python_dotenv',
+        'sqlalchemy'
     ],
     hookspath=[],
     hooksconfig={},

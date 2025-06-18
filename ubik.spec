@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_submodules
 
-hiddenimports = ['agno.models.openai', 'composio_agno', 'agno.tools.mcp', 'mcp', 'agno.team.team', 'agno.agent']
+hiddenimports = ['agno.models.openai', 'composio_agno', 'agno.tools.mcp', 'mcp', 'sqlalchemy', 'agno.team.team', 'agno.agent']
 hiddenimports += collect_submodules('agno')
 hiddenimports += collect_submodules('composio_agno')
 
