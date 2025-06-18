@@ -213,7 +213,7 @@ def list_connected_apps(entity_id: str, composio_api_key: str):
         print(f"❌ Error listing connections: {e}")
 
 
-async def create_dynamic_team(user_request: str, model:OpenAIChat, agent_selection_model:OpenAIChat, toolset: ComposioToolSet, memory: Memory, storage: SqliteStorage):
+async def create_dynamic_team(user_request: str, model:OpenAIChat, agent_selection_model:OpenAIChat, toolset: ComposioToolSet, memory: Memory, storage: SqliteStorage, user_id: str):
     """Create team dynamically based on AI selection"""
     
     # Get AI selection
@@ -323,6 +323,13 @@ async def create_dynamic_team(user_request: str, model:OpenAIChat, agent_selecti
                     add_datetime_to_instructions=True,
                     timezone_identifier=system_timezone(),
                     add_location_to_instructions=True,
+                    user_id=user_id,
+                    memory=memory,
+                    storage=storage,
+                    enable_agentic_memory=True,
+                    enable_user_memories=True,
+                    add_history_to_messages=True,
+                    num_history_runs=3,
                 )
                 
                 # Create team with filesystem
@@ -354,13 +361,16 @@ async def create_dynamic_team(user_request: str, model:OpenAIChat, agent_selecti
                     enable_user_memories=True,
                     add_history_to_messages=True,
                     num_history_runs=3,
+                    user_id=user_id,
+                    enable_session_summaries=True,
+
                 )
                 
                 print(f"👥 Team created with {len(agents)+1} agents")
                 
                 # Stream response
-                response_stream = await team.arun(user_request, stream=True)
-                
+                response_stream = await team.arun(user_request, stream=True, user_id=user_id)
+
                 print("\n==RESPONSE==")
                 async for event in response_stream:
                     if event.event == "TeamRunResponseContent":
@@ -403,13 +413,14 @@ async def create_dynamic_team(user_request: str, model:OpenAIChat, agent_selecti
             add_history_to_messages=True,
             num_history_runs=3,
             enable_session_summaries=True,
+            user_id=user_id,
 
         )
         
         print(f"👥 Team created with {len(agents)} agents")
         
         # Stream response
-        response_stream = await team.arun(user_request, stream=True)
+        response_stream = await team.arun(user_request, stream=True, user_id=user_id)
         
         print("\n==RESPONSE==")
         async for event in response_stream:
@@ -420,7 +431,7 @@ async def create_dynamic_team(user_request: str, model:OpenAIChat, agent_selecti
                 ...
 
 
-async def process_query(user_request: str, entity_id: str, openai_key: str, composio_api_key: str, model:OpenAIChat, agent_selection_model:OpenAIChat, memory: Memory, storage: SqliteStorage):
+async def process_query(user_request: str, entity_id: str, openai_key: str, composio_api_key: str, model:OpenAIChat, agent_selection_model:OpenAIChat, memory: Memory, storage: SqliteStorage, user_id: str):
     """Process a user query"""
     try:
         
@@ -429,7 +440,7 @@ async def process_query(user_request: str, entity_id: str, openai_key: str, comp
         print("🤖 Processing your request...")
         print("=" * 50)
 
-        await create_dynamic_team(user_request, model, agent_selection_model, toolset, memory, storage)
+        await create_dynamic_team(user_request, model, agent_selection_model, toolset, memory, storage, user_id)
 
         print("\n" + "=" * 50)
         print("✅ Completed!")
@@ -543,7 +554,7 @@ Examples:
             print("❌ For queries, you need: --entity_id, --composio_api_key, and --openai_key")
             sys.exit(1)
 
-        asyncio.run(process_query(args.query, args.entity_id, args.openai_key, args.composio_api_key, model, agent_selection_model, memory, storage))
+        asyncio.run(process_query(args.query, args.entity_id, args.openai_key, args.composio_api_key, model, agent_selection_model, memory, storage, user_id))
 
     elif args.list_apps:
         if not args.composio_api_key:
